@@ -46,11 +46,19 @@
 
 #![cfg_attr(not(test), no_std)]
 
-#[cfg(feature = "std")]
+#[cfg(any(test, feature = "std"))]
 extern crate std;
 
-#[cfg(feature = "alloc")]
+#[cfg(any(test, feature = "alloc"))]
 extern crate alloc;
+
+#[cfg(any(test, feature = "alloc"))]
+pub(crate) use alloc::{vec::Vec, string::String};
+
+#[cfg(not(any(test, feature = "alloc")))]
+pub(crate) type Vec<T> = heapless::Vec<T, heapless::consts::U256>;
+#[cfg(not(any(test, feature = "alloc")))]
+pub(crate) type String = heapless::String<heapless::consts::U256>;
 
 mod connect;
 mod decoder;

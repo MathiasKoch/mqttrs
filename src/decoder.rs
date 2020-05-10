@@ -1,5 +1,4 @@
 use crate::*;
-use alloc::{string::String, vec::Vec};
 use bytes::Buf;
 
 /// Decode bytes from a [BytesMut] buffer as a [Packet] enum.
@@ -127,7 +126,10 @@ impl Header {
 }
 
 pub(crate) fn read_string(buf: impl Buf) -> Result<String, Error> {
-    String::from_utf8(read_bytes(buf)?).map_err(|e| Error::InvalidString(e.utf8_error()))
+    match core::str::from_utf8(&read_bytes(buf)?) {
+        Ok(s) => Ok(String::from(s)),
+        Err(e) => Err(Error::InvalidString(e)),
+    }
 }
 
 pub(crate) fn read_bytes(mut buf: impl Buf) -> Result<Vec<u8>, Error> {
@@ -135,7 +137,12 @@ pub(crate) fn read_bytes(mut buf: impl Buf) -> Result<Vec<u8>, Error> {
     if len > buf.remaining() {
         Err(Error::InvalidLength)
     } else {
-        let r = buf.bytes()[..len].to_vec();
+        let mut r: Vec<u8> = Vec::new();
+        #[cfg(not(any(test, feature = "alloc")))]
+        r.extend_from_slice(&buf.bytes()[..len]).map_err(|_| Error::BufferTooSmall)?;
+        #[cfg(any(test, feature = "alloc"))]
+        r.extend_from_slice(&buf.bytes()[..len]);
+
         buf.advance(len);
         Ok(r)
     }

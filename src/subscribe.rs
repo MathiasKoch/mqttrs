@@ -2,7 +2,6 @@ use crate::{decoder::*, encoder::*, *};
 use bytes::{Buf, BufMut};
 #[cfg(feature = "derive")]
 use serde::{Deserialize, Serialize};
-use alloc::{string::String, vec::Vec};
 
 /// Subscribe topic.
 ///

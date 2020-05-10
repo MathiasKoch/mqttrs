@@ -1,5 +1,4 @@
 use crate::{decoder::*, encoder::*, *};
-use alloc::{string::String, vec::Vec};
 use bytes::{Buf, BufMut};
 
 /// Protocol version.

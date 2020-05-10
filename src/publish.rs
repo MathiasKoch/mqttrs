@@ -1,5 +1,4 @@
 use crate::{decoder::*, encoder::*, *};
-use alloc::{string::String, vec::Vec};
 use bytes::{Buf, BufMut};
 
 /// Publish packet ([MQTT 3.3]).
@@ -24,12 +23,18 @@ impl Publish {
             QoS::ExactlyOnce => QosPid::ExactlyOnce(Pid::from_buffer(&mut buf)?),
         };
 
+        let mut payload: Vec<u8> = Vec::new();
+        #[cfg(not(any(test, feature = "alloc")))]
+        payload.extend_from_slice(&buf.bytes()).map_err(|_| Error::BufferTooSmall)?;
+        #[cfg(any(test, feature = "alloc"))]
+        payload.extend_from_slice(&buf.bytes());
+
         Ok(Publish {
             dup: header.dup,
             qospid,
             retain: header.retain,
             topic_name,
-            payload: buf.bytes().to_vec(),
+            payload,
         })
     }
     pub(crate) fn to_buffer(&self, mut buf: impl BufMut) -> Result<usize, Error> {
@@ -69,7 +74,7 @@ impl Publish {
         }
 
         // Payload
-        buf.put_slice(self.payload.as_slice());
+        buf.put_slice(self.payload.as_ref());
 
         Ok(write_len)
     }

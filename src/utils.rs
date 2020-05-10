@@ -1,6 +1,7 @@
-use alloc::string::String;
 use bytes::{Buf, BufMut};
 use core::{convert::TryFrom, fmt, num::NonZeroU16};
+
+use crate::String;
 
 #[cfg(feature = "derive")]
 use serde::{Deserialize, Serialize};
@@ -46,6 +47,9 @@ pub enum Error {
     /// You'll hopefully never see this.
     #[cfg(feature = "std")]
     IoError(ErrorKind, String),
+    ///
+    #[cfg(not(any(test, feature = "alloc")))]
+    BufferTooSmall
 }
 
 #[cfg(feature = "std")]
