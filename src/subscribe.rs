@@ -3,6 +3,8 @@ use bytes::{Buf, BufMut};
 #[cfg(feature = "derive")]
 use serde::{Deserialize, Serialize};
 
+use heapless::{Vec, String, ArrayLength};
+
 /// Subscribe topic.
 ///
 /// [Subscribe] packets contain a `Vec` of those.
@@ -10,8 +12,11 @@ use serde::{Deserialize, Serialize};
 /// [Subscribe]: struct.Subscribe.html
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "derive", derive(Serialize, Deserialize))]
-pub struct SubscribeTopic {
-    pub topic_path: String,
+pub struct SubscribeTopic<T>
+where
+    T: ArrayLength<u8>
+{
+    pub topic_path: String<T>,
     pub qos: QoS,
 }
 
@@ -38,37 +43,57 @@ impl SubscribeReturnCodes {
 ///
 /// [MQTT 3.8]: http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718063
 #[derive(Debug, Clone, PartialEq)]
-pub struct Subscribe {
+pub struct Subscribe<L, T>
+where
+    T: ArrayLength<u8>,
+    L: ArrayLength<SubscribeTopic<T>>,
+{
     pub pid: Pid,
-    pub topics: Vec<SubscribeTopic>,
+    pub topics: Vec<SubscribeTopic<T>, L>,
 }
 
 /// Subsack packet ([MQTT 3.9]).
 ///
 /// [MQTT 3.9]: http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718068
 #[derive(Debug, Clone, PartialEq)]
-pub struct Suback {
+pub struct Suback<L>
+where
+    L: ArrayLength<SubscribeReturnCodes>
+{
     pub pid: Pid,
-    pub return_codes: Vec<SubscribeReturnCodes>,
+    pub return_codes: Vec<SubscribeReturnCodes, L>,
 }
 
 /// Unsubscribe packet ([MQTT 3.10]).
 ///
 /// [MQTT 3.10]: http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718072
 #[derive(Debug, Clone, PartialEq)]
-pub struct Unsubscribe {
+pub struct Unsubscribe<L, T>
+where
+    T: ArrayLength<u8>,
+    L: ArrayLength<String<T>>,
+{
     pub pid: Pid,
-    pub topics: Vec<String>,
+    pub topics: Vec<String<T>, L>,
 }
 
-impl Subscribe {
+impl<L, T> Subscribe<L, T>
+where
+    T: ArrayLength<u8>,
+    L: ArrayLength<SubscribeTopic<T>>,
+{
     pub(crate) fn from_buffer(mut buf: impl Buf) -> Result<Self, Error> {
         let pid = Pid::from_buffer(&mut buf)?;
-        let mut topics: Vec<SubscribeTopic> = Vec::new();
+        let mut topics: Vec<SubscribeTopic<T>, L> = Vec::new();
         while buf.remaining() != 0 {
             let topic_path = read_string(&mut buf)?;
             let qos = QoS::from_u8(buf.get_u8())?;
             let topic = SubscribeTopic { topic_path, qos };
+
+            #[cfg(not(any(test, feature = "alloc")))]
+            topics.push(topic).map_err(|_| Error::BufferTooSmall)?;
+
+            #[cfg(any(test, feature = "alloc"))]
             topics.push(topic);
         }
         Ok(Subscribe { pid, topics })
@@ -99,12 +124,21 @@ impl Subscribe {
     }
 }
 
-impl Unsubscribe {
+impl<L, T> Unsubscribe<L, T>
+where
+    T: ArrayLength<u8>,
+    L: ArrayLength<String<T>>,
+{
     pub(crate) fn from_buffer(mut buf: impl Buf) -> Result<Self, Error> {
         let pid = Pid::from_buffer(&mut buf)?;
-        let mut topics: Vec<String> = Vec::new();
+        let mut topics: Vec<String<T>, L> = Vec::new();
         while buf.remaining() != 0 {
             let topic_path = read_string(&mut buf)?;
+
+            #[cfg(not(any(test, feature = "alloc")))]
+            topics.push(topic_path).map_err(|_| Error::BufferTooSmall)?;
+
+            #[cfg(any(test, feature = "alloc"))]
             topics.push(topic_path);
         }
         Ok(Unsubscribe { pid, topics })
@@ -128,10 +162,13 @@ impl Unsubscribe {
     }
 }
 
-impl Suback {
+impl<L> Suback<L>
+where
+    L: ArrayLength<SubscribeReturnCodes>
+{
     pub(crate) fn from_buffer(mut buf: impl Buf) -> Result<Self, Error> {
         let pid = Pid::from_buffer(&mut buf)?;
-        let mut return_codes: Vec<SubscribeReturnCodes> = Vec::new();
+        let mut return_codes: Vec<SubscribeReturnCodes, L> = Vec::new();
         while buf.remaining() != 0 {
             let code = buf.get_u8();
             let r = if code == 0x80 {
@@ -139,6 +176,10 @@ impl Suback {
             } else {
                 SubscribeReturnCodes::Success(QoS::from_u8(code)?)
             };
+            #[cfg(not(any(test, feature = "alloc")))]
+            return_codes.push(r).map_err(|_| Error::BufferTooSmall)?;
+
+            #[cfg(any(test, feature = "alloc"))]
             return_codes.push(r);
         }
         Ok(Suback { return_codes, pid })

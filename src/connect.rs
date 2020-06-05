@@ -1,6 +1,8 @@
 use crate::{decoder::*, encoder::*, *};
 use bytes::{Buf, BufMut};
 
+use heapless::{consts, ArrayLength, String, Vec};
+
 /// Protocol version.
 ///
 /// Sent in [`Connect`] packet.
@@ -52,9 +54,13 @@ impl Protocol {
 /// [Connect]: struct.Connect.html
 /// [MQTT 3.1.3.3]: http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718031
 #[derive(Debug, Clone, PartialEq)]
-pub struct LastWill {
-    pub topic: String,
-    pub message: Vec<u8>,
+pub struct LastWill<T, M>
+where
+    T: ArrayLength<u8>,
+    M: ArrayLength<u8>,
+{
+    pub topic: String<T>,
+    pub message: Vec<u8, M>,
     pub qos: QoS,
     pub retain: bool,
 }
@@ -102,14 +108,21 @@ impl ConnectReturnCode {
 ///
 /// [MQTT 3.1]: http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718028
 #[derive(Debug, Clone, PartialEq)]
-pub struct Connect {
+pub struct Connect<C, U, P, T, M>
+where
+    C: ArrayLength<u8>,
+    U: ArrayLength<u8>,
+    P: ArrayLength<u8>,
+    T: ArrayLength<u8>,
+    M: ArrayLength<u8>,
+{
     pub protocol: Protocol,
     pub keep_alive: u16,
-    pub client_id: String,
+    pub client_id: String<C>,
     pub clean_session: bool,
-    pub last_will: Option<LastWill>,
-    pub username: Option<String>,
-    pub password: Option<Vec<u8>>,
+    pub last_will: Option<LastWill<T, M>>,
+    pub username: Option<String<U>>,
+    pub password: Option<Vec<u8, P>>,
 }
 
 /// Connack packet ([MQTT 3.2]).
@@ -121,9 +134,16 @@ pub struct Connack {
     pub code: ConnectReturnCode,
 }
 
-impl Connect {
+impl<C, U, P, T, M> Connect<C, U, P, T, M>
+where
+    C: ArrayLength<u8>,
+    U: ArrayLength<u8>,
+    P: ArrayLength<u8>,
+    T: ArrayLength<u8>,
+    M: ArrayLength<u8>,
+{
     pub(crate) fn from_buffer(mut buf: impl Buf) -> Result<Self, Error> {
-        let protocol_name = read_string(&mut buf)?;
+        let protocol_name: String<consts::U6> = read_string(&mut buf)?;
         let protocol_level = buf.get_u8();
         let protocol = Protocol::new(&protocol_name, protocol_level).unwrap();
 

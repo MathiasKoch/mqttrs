@@ -44,7 +44,7 @@ fn test_connect() {
         clean_session: true,
         last_will: Some(LastWill {
             topic: "/a".into(),
-            message: "offline".into(),
+            message: "offline",
             qos: QoS::AtLeastOnce,
             retain: false,
         }),

@@ -1,5 +1,7 @@
-use crate::{Error, Packet};
+use crate::{Error, Packet, SubscribeReturnCodes, SubscribeTopic};
 use bytes::BufMut;
+
+use heapless::{ArrayLength, String};
 
 /// Encode a [Packet] enum into a [BufMut] buffer.
 ///
@@ -27,7 +29,38 @@ use bytes::BufMut;
 ///
 /// [Packet]: ../enum.Packet.html
 /// [BufMut]: https://docs.rs/bytes/0.5.3/bytes/trait.BufMut.html
-pub fn encode(packet: &Packet, mut buf: impl BufMut) -> Result<usize, Error> {
+pub fn encode<
+    ClientIdLen,
+    UsernameLen,
+    PasswordLen,
+    SubReq,
+    UnsubReq,
+    TopicLen,
+    PayloadLen,
+    SubackReq,
+>(
+    packet: &Packet<
+        ClientIdLen,
+        UsernameLen,
+        PasswordLen,
+        SubReq,
+        UnsubReq,
+        TopicLen,
+        PayloadLen,
+        SubackReq,
+    >,
+    mut buf: impl BufMut,
+) -> Result<usize, Error>
+where
+    ClientIdLen: ArrayLength<u8>,
+    UsernameLen: ArrayLength<u8>,
+    PasswordLen: ArrayLength<u8>,
+    TopicLen: ArrayLength<u8>,
+    SubReq: ArrayLength<SubscribeTopic<TopicLen>>,
+    SubackReq: ArrayLength<SubscribeReturnCodes>,
+    UnsubReq: ArrayLength<String<TopicLen>>,
+    PayloadLen: ArrayLength<u8>,
+{
     match packet {
         Packet::Connect(connect) => connect.to_buffer(buf),
         Packet::Connack(connack) => connack.to_buffer(buf),
@@ -123,19 +156,19 @@ pub(crate) fn write_length(len: usize, mut buf: impl BufMut) -> Result<usize, Er
         0..=127 => {
             check_remaining(&mut buf, len + 1)?;
             len + 1
-        },
+        }
         128..=16383 => {
             check_remaining(&mut buf, len + 2)?;
             len + 2
-        },
+        }
         16384..=2097151 => {
             check_remaining(&mut buf, len + 3)?;
             len + 3
-        },
+        }
         2097152..=268435455 => {
             check_remaining(&mut buf, len + 4)?;
             len + 4
-        },
+        }
         _ => return Err(Error::InvalidLength),
     };
     let mut done = false;

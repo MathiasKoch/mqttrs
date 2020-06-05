@@ -1,19 +1,29 @@
 use crate::{decoder::*, encoder::*, *};
 use bytes::{Buf, BufMut};
 
+use heapless::{String, Vec, ArrayLength};
+
 /// Publish packet ([MQTT 3.3]).
 ///
 /// [MQTT 3.3]: http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718037
 #[derive(Debug, Clone, PartialEq)]
-pub struct Publish {
+pub struct Publish<T, P>
+where
+    T: ArrayLength<u8>,
+    P: ArrayLength<u8>,
+{
     pub dup: bool,
     pub qospid: QosPid,
     pub retain: bool,
-    pub topic_name: String,
-    pub payload: Vec<u8>,
+    pub topic_name: String<T>,
+    pub payload: Vec<u8, P>,
 }
 
-impl Publish {
+impl<T, P> Publish<T, P>
+where
+    T: ArrayLength<u8>,
+    P: ArrayLength<u8>,
+{
     pub(crate) fn from_buffer(header: &Header, mut buf: impl Buf) -> Result<Self, Error> {
         let topic_name = read_string(&mut buf)?;
 
@@ -23,18 +33,12 @@ impl Publish {
             QoS::ExactlyOnce => QosPid::ExactlyOnce(Pid::from_buffer(&mut buf)?),
         };
 
-        let mut payload: Vec<u8> = Vec::new();
-        #[cfg(not(any(test, feature = "alloc")))]
-        payload.extend_from_slice(&buf.bytes()).map_err(|_| Error::BufferTooSmall)?;
-        #[cfg(any(test, feature = "alloc"))]
-        payload.extend_from_slice(&buf.bytes());
-
         Ok(Publish {
             dup: header.dup,
             qospid,
             retain: header.retain,
             topic_name,
-            payload,
+            payload: Vec::from_slice(&buf.bytes()).map_err(|_| Error::BufferTooSmall)?,
         })
     }
     pub(crate) fn to_buffer(&self, mut buf: impl BufMut) -> Result<usize, Error> {
